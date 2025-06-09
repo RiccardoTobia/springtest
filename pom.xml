@@ -176,7 +176,8 @@
                     <consoleOutput>true</consoleOutput>
                     <failsOnError>true</failsOnError>
                 </configuration>
-                <!--<executions>
+                <!--
+                <executions>
                     <execution>
                         <id>validate</id>
                         <phase>validate</phase>
