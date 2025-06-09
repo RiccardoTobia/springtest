@@ -1,0 +1,183 @@
+name: Spring Boot CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  JAVA_VERSION: '17'
+  MAVEN_OPTS: -Dmaven.repo.local=${{ github.workspace }}/.m2/repository
+
+jobs:
+  # Job per i test e la build
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    services:
+      # Database per i test di integrazione
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout del codice
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+
+    - name: Cache delle dipendenze Maven
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+
+    - name: Verifica stile del codice con Checkstyle
+      run: mvn checkstyle:check
+
+    - name: Test unitari
+      run: mvn test -Dspring.profiles.active=test
+      env:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
+        SPRING_DATASOURCE_USERNAME: postgres
+        SPRING_DATASOURCE_PASSWORD: testpassword
+
+    - name: Test di integrazione
+      run: mvn verify -Dspring.profiles.active=integration-test
+      env:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
+        SPRING_DATASOURCE_USERNAME: postgres
+        SPRING_DATASOURCE_PASSWORD: testpassword
+
+    - name: Analisi del codice con SonarQube
+      run: mvn sonar:sonar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    - name: Build dell'applicazione
+      run: mvn clean package -DskipTests
+
+    - name: Build dell'immagine Docker
+      run: |
+        docker build -t myapp:${{ github.sha }} .
+        docker tag myapp:${{ github.sha }} myapp:latest
+
+    - name: Carica i report dei test
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-reports
+        path: |
+          target/surefire-reports/
+          target/failsafe-reports/
+          target/site/jacoco/
+
+    - name: Carica l'artefatto JAR
+      uses: actions/upload-artifact@v3
+      with:
+        name: jar-artifact
+        path: target/*.jar
+
+  # Job per i test di sicurezza
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    
+    steps:
+    - name: Checkout del codice
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+
+    - name: Scansione delle vulnerabilità con OWASP
+      run: mvn org.owasp:dependency-check-maven:check
+
+    - name: Carica report di sicurezza
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: target/dependency-check-report.html
+
+  # Job per il deployment in staging
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [test-and-build, security-scan]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Scarica l'artefatto
+      uses: actions/download-artifact@v3
+      with:
+        name: jar-artifact
+
+    - name: Deploy su staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Qui inseriresti i comandi per il deployment reale
+        # Ad esempio: scp, rsync, kubectl, terraform, etc.
+        
+    - name: Test di smoke su staging
+      run: |
+        echo "Running smoke tests on staging..."
+        # Test basici per verificare che l'app sia up and running
+        curl -f http://staging.myapp.com/actuator/health || exit 1
+
+  # Job per il deployment in produzione
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [test-and-build, security-scan]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Scarica l'artefatto
+      uses: actions/download-artifact@v3
+      with:
+        name: jar-artifact
+
+    - name: Deploy su produzione
+      run: |
+        echo "Deploying to production environment..."
+        # Deployment in produzione con strategie blue-green o rolling
+        
+    - name: Test post-deployment
+      run: |
+        echo "Running post-deployment tests..."
+        curl -f https://api.myapp.com/actuator/health || exit 1
+
+  # Job per le notifiche
+  notify:
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    
+    steps:
+    - name: Notifica Slack
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      if: always()
