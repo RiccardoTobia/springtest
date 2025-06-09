@@ -41,7 +41,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Cache delle dipendenze Maven
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -79,7 +79,7 @@ jobs:
         docker tag myapp:${{ github.sha }} myapp:latest
 
     - name: Carica i report dei test
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-reports
@@ -89,7 +89,7 @@ jobs:
           target/site/jacoco/
 
     - name: Carica l'artefatto JAR
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: jar-artifact
         path: target/*.jar
@@ -113,7 +113,7 @@ jobs:
       run: mvn org.owasp:dependency-check-maven:check
 
     - name: Carica report di sicurezza
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-reports
@@ -128,7 +128,7 @@ jobs:
     
     steps:
     - name: Scarica l'artefatto
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: jar-artifact
 
@@ -153,7 +153,7 @@ jobs:
     
     steps:
     - name: Scarica l'artefatto
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: jar-artifact
 
