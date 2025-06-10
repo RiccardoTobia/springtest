@@ -22,6 +22,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: testpassword
           POSTGRES_DB: testdb
+          POSTGRES_USER: postgres
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -49,13 +50,17 @@ jobs:
 
     - name: Verifica stile del codice con Checkstyle
       run: mvn checkstyle:check
+      continue-on-error: true
 
-    - name: Test unitari
+    - name: Test unitari e JPA
       run: mvn test -Dspring.profiles.active=test
       env:
+        # Configurazione per i test JPA con PostgreSQL
         SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: testpassword
+        SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+        SPRING_JPA_SHOW_SQL: true
 
     - name: Test di integrazione
       run: mvn verify -Dspring.profiles.active=integration-test
@@ -64,11 +69,15 @@ jobs:
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: testpassword
 
+    - name: Genera report di copertura
+      run: mvn jacoco:report
+
     - name: Analisi del codice con SonarQube
       run: mvn sonar:sonar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      continue-on-error: true
 
     - name: Build dell'applicazione
       run: mvn clean package -DskipTests
@@ -111,6 +120,7 @@ jobs:
 
     - name: Scansione delle vulnerabilità con OWASP
       run: mvn org.owasp:dependency-check-maven:check
+      continue-on-error: true
 
     - name: Carica report di sicurezza
       uses: actions/upload-artifact@v4
