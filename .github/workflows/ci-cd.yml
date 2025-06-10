@@ -87,17 +87,6 @@ jobs:
         if [ -d "target/failsafe-reports" ]; then
           find target/failsafe-reports -name "*.txt" -exec echo "=== {} ===" \; -exec cat {} \;
         fi
-
-    - name: Test di caricamento contesto
-      run: mvn verify -Dspring.profiles.active=test -X -e
-      env:
-        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
-        SPRING_DATASOURCE_USERNAME: postgres
-        SPRING_DATASOURCE_PASSWORD: testpassword
-        SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
-        SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
-        SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION: true
-
     - name: Genera report di copertura
       run: mvn jacoco:report
 
