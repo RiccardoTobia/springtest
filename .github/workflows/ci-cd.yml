@@ -52,8 +52,21 @@ jobs:
       run: mvn checkstyle:check
       continue-on-error: true
 
-    - name: Test unitari e JPA
-      run: mvn test -Dspring.profiles.active=test
+    - name: Verifica connessione database
+      run: |
+        echo "Verifico connessione al database..."
+        pg_isready -h localhost -p 5432 -U postgres
+        psql -h localhost -p 5432 -U postgres -d testdb -c "SELECT version();"
+      env:
+        PGPASSWORD: testpassword
+
+    - name: Test unitari e JPA (con debug)
+      run: |
+        echo "=== Configurazione Database ==="
+        echo "URL: jdbc:postgresql://localhost:5432/testdb"
+        echo "User: postgres"
+        echo "=== Esecuzione Test ==="
+        mvn test -Dspring.profiles.active=test -X -e
       env:
         # Configurazione per i test JPA con PostgreSQL
         SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
@@ -61,13 +74,29 @@ jobs:
         SPRING_DATASOURCE_PASSWORD: testpassword
         SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
         SPRING_JPA_SHOW_SQL: true
+        SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+        SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION: true
 
-    - name: Test di integrazione
-      run: mvn verify -Dspring.profiles.active=integration-test
+    - name: Mostra log dei test falliti
+      if: failure()
+      run: |
+        echo "=== LOG DEI TEST FALLITI ==="
+        if [ -d "target/surefire-reports" ]; then
+          find target/surefire-reports -name "*.txt" -exec echo "=== {} ===" \; -exec cat {} \;
+        fi
+        if [ -d "target/failsafe-reports" ]; then
+          find target/failsafe-reports -name "*.txt" -exec echo "=== {} ===" \; -exec cat {} \;
+        fi
+
+    - name: Test di caricamento contesto
+      run: mvn verify -Dspring.profiles.active=test -X -e
       env:
         SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
         SPRING_DATASOURCE_USERNAME: postgres
         SPRING_DATASOURCE_PASSWORD: testpassword
+        SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+        SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+        SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION: true
 
     - name: Genera report di copertura
       run: mvn jacoco:report
