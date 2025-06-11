@@ -9,21 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_DB: testdb
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: testpassword
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
     - name: Checkout repository
@@ -42,33 +27,22 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
 
-    - name: Wait for PostgreSQL
-      run: |
-        until pg_isready -h localhost -p 5432 -U postgres; do
-          echo "Waiting for PostgreSQL..."
-          sleep 2
-        done
-
     - name: Run tests
       run: mvn clean test
       env:
         SPRING_PROFILES_ACTIVE: test
-        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
-        SPRING_DATASOURCE_USERNAME: postgres
-        SPRING_DATASOURCE_PASSWORD: testpassword
 
     - name: Run specific JPA test
       run: mvn test -Dtest=AnimaleJpaTestCase
       env:
         SPRING_PROFILES_ACTIVE: test
 
-    # - name: Generate test report
-    #   uses: dorny/test-reporter@v1.9.1
-    #   if: success() || failure()
-    #   with:
-    #     name: Maven Tests
-    #     path: target/surefire-reports/*.xml
-    #     reporter: java-junit
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: |
+          target/surefire-reports/*.xml
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
