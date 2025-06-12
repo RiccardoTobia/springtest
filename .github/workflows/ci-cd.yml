@@ -27,13 +27,8 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
 
-    - name: Run tests
+    - name: Run all tests
       run: mvn clean test
-      env:
-        SPRING_PROFILES_ACTIVE: test
-
-    - name: Run specific JPA test
-      run: mvn test -Dtest=AnimaleJpaTestCase
       env:
         SPRING_PROFILES_ACTIVE: test
 
@@ -48,6 +43,9 @@ jobs:
           echo ""
           echo "📋 Test results summary:"
           find target/surefire-reports -name "*.xml" -exec grep -l "testcase" {} \; | wc -l | xargs echo "Test files:"
+          echo ""
+          echo "🔍 Test execution details:"
+          grep -h "tests=" target/surefire-reports/TEST-*.xml | head -5
         else
           echo "❌ No test reports found"
         fi
